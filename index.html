@@ -50,8 +50,8 @@
   </div>
   <div class="row">
     <label>Tilt</label>
-    <input type="range" id="tilt" min="-45" max="45" step="1" value="23">
-    <span class="val" id="tiltVal">23°</span>
+    <input type="range" id="tilt" min="-45" max="45" step="1" value="0">
+    <span class="val" id="tiltVal">0°</span>
   </div>
   <div class="row">
     <label>Light</label>
@@ -60,8 +60,8 @@
   </div>
   <div class="row">
     <label>Zoom</label>
-    <input type="range" id="zoom" min="2" max="6" step="0.1" value="3">
-    <span class="val" id="zoomVal">3.0</span>
+    <input type="range" id="zoom" min="2" max="6" step="0.1" value="5">
+    <span class="val" id="zoomVal">5.0</span>
   </div>
   <div style="margin:8px 0 4px;">
     <label style="display:block;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Map Image</label>
@@ -145,7 +145,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf5f0e6);
 
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
-camera.position.set(0, 0, 3);
+camera.position.set(0, 0, 5);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
@@ -153,9 +153,9 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 wrap.appendChild(renderer.domElement);
 
 // Lights
-const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+const ambient = new THREE.AmbientLight(0xffffff, 1.7);
 scene.add(ambient);
-const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+const dir = new THREE.DirectionalLight(0xffffff, 1.2);
 dir.position.set(5, 3, 5);
 scene.add(dir);
 
@@ -225,8 +225,8 @@ document.getElementById('mapFile').addEventListener('change', e => {
 let currentLight = 1.0;
 lightEl.addEventListener('input', e => {
   currentLight = parseFloat(e.target.value);
-  ambient.intensity = 0.85 * currentLight;
-  dir.intensity = 0.6 * currentLight;
+  ambient.intensity = 1.7 * currentLight;
+  dir.intensity = 1.2 * currentLight;
   lightVal.textContent = currentLight.toFixed(2);
 });
 
@@ -317,7 +317,7 @@ pauseBtn.addEventListener('click', () => {
 });
 
 // Initial tilt
-tiltGroup.rotation.z = 23 * Math.PI / 180;
+tiltGroup.rotation.z = 0;
 
 // Mouse controls
 let isDragging = false, isRightDragging = false;
