@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Running the Project
 
-No build system. Open `rotating-globe.html` directly in any modern browser (WebGL required).
+No build system. Open `index.html` directly in any modern browser (WebGL required).
 
 To develop: edit the HTML file, refresh browser. To deploy: copy the single file to any web server.
 
 ## Architecture
 
-Single-file HTML app (`rotating-globe.html`). All logic, styles, and a base64-encoded equirectangular world map are embedded.
+Single-file HTML app (`index.html`). All logic, styles, and a base64-encoded equirectangular world map are embedded.
 
 **Dependencies (CDN):**
 - Three.js v0.160.0 — 3D rendering
