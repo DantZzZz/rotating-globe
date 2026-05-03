@@ -186,6 +186,7 @@ scene.add(tiltGroup);
 // Controls state
 let speed = 0.5;
 let paused = false;
+let isExporting = false;
 const clock = new THREE.Clock();
 
 // UI hooks
@@ -371,6 +372,7 @@ window.addEventListener('resize', () => {
 // Animation loop
 function animate() {
   requestAnimationFrame(animate);
+  if (isExporting) return;
   const dt = clock.getDelta();
   if (!paused) {
     globe.rotation.y += speed * dt;
@@ -390,17 +392,20 @@ animate();
 // ============ WebM Export ============
 const webmBtn = document.getElementById('webmBtn');
 
-webmBtn.addEventListener('click', () => {
-  const canvas = renderer.domElement;
+webmBtn.addEventListener('click', async () => {
   const transparent = transparentBgEl.checked;
+  const FPS = 60;
+  const safeSpeed = Math.max(speed, 0.01);
+  // One full revolution, last frame = one step before start → seamless loop
+  const totalFrames = Math.round(2 * Math.PI / safeSpeed * FPS);
+  const frameMs = 1000 / FPS;
 
-  // VP9 supports alpha channel; fall back to default if unsupported
   const mimeType = transparent && MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
     ? 'video/webm;codecs=vp9'
     : 'video/webm';
 
-  const stream = canvas.captureStream(60);
-  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
+  const stream = renderer.domElement.captureStream(FPS);
+  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 16_000_000 });
   const chunks = [];
 
   recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
@@ -416,14 +421,24 @@ webmBtn.addEventListener('click', () => {
     URL.revokeObjectURL(url);
     webmBtn.disabled = false;
     webmBtn.textContent = 'Export WebM';
+    isExporting = false;
+    clock.getDelta(); // flush accumulated delta so animation resumes smoothly
   };
 
-  // Record exactly one full revolution at current speed
-  const durationMs = (2 * Math.PI / speed) * 1000;
-  recorder.start();
+  const startRot = globe.rotation.y;
+  isExporting = true;
   webmBtn.disabled = true;
-  webmBtn.textContent = `Recording… (${Math.ceil(durationMs / 1000)}s)`;
-  setTimeout(() => recorder.stop(), durationMs);
+  recorder.start();
+
+  for (let i = 0; i < totalFrames; i++) {
+    webmBtn.textContent = `Rendering… ${i + 1}/${totalFrames}`;
+    globe.rotation.y = startRot + (i / totalFrames) * Math.PI * 2;
+    dropShadowMesh.quaternion.copy(camera.quaternion);
+    renderer.render(scene, camera);
+    await new Promise(r => setTimeout(r, frameMs));
+  }
+
+  recorder.stop();
 });
 
 // ============ GIF Export ============
