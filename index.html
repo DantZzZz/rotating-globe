@@ -184,6 +184,11 @@
   .anno-week .anno-arrow { display: block; margin-top: 4px; width: 110px; height: 70px; }
   .anno-spin { bottom: 2%; right: 4%; transform: rotate(-4deg); }
   .anno-spin .rot { font-size: 22px; }
+  .anno-enrolled { bottom: 4%; right: -2%; text-align: right; }
+  .anno-enrolled .anno-arrow { display: block; width: 110px; height: 70px; margin: 0 0 4px auto; }
+  .anno-enrolled .anno-stat { font-family: "Caveat", cursive; font-size: 34px; font-weight: 700; line-height: 1; display: block; transform: rotate(5deg); transform-origin: right center; }
+  .anno-enrolled .anno-stat u { text-decoration-thickness: 2px; text-underline-offset: 4px; }
+  .anno-enrolled .anno-sub { font-family: "Caveat", cursive; font-size: 20px; font-weight: 500; line-height: 1; display: block; margin-top: 6px; transform: rotate(5deg); transform-origin: right center; }
 
   /* MARQUEE */
   .marquee {
@@ -232,6 +237,10 @@
     .anno-week .anno-arrow { width: 86px; height: 56px; }
     .anno-spin { bottom: 0; right: 2%; }
     .anno-spin .rot { font-size: 18px; }
+    .anno-enrolled { bottom: 0; right: 0; }
+    .anno-enrolled .anno-stat { font-size: 26px; }
+    .anno-enrolled .anno-sub { font-size: 16px; }
+    .anno-enrolled .anno-arrow { width: 86px; height: 56px; }
     .marquee-track { font-size: 18px; gap: 24px; }
     .marquee-item { gap: 24px; }
   }
@@ -253,12 +262,25 @@
     box-shadow: 4px 4px 0 #222;
     font-size: 13px;
     min-width: 220px;
-    max-height: 90vh; overflow-y: auto;
+    width: 280px;
+    height: 90vh;
+    max-height: 90vh; overflow: auto;
     z-index: 100;
     display: none;
+    resize: both;
   }
   #controls.visible { display: block; }
-  #controls h3 { margin: 0 0 10px 0; font-size: 14px; }
+  #controls h3 {
+    margin: -14px -16px 10px -16px;
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: grab;
+    background: #f3f3f3;
+    border-bottom: 1.5px solid #ddd;
+    border-radius: 6px 6px 0 0;
+    user-select: none;
+  }
+  #controls h3:active { cursor: grabbing; }
   .row { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; gap: 10px; }
   .row label { flex: 0 0 70px; color: #444; }
   .row input[type=range] { flex: 1; }
@@ -352,6 +374,14 @@
             <path d="M 92 56 L 100 64 L 90 68"/>
           </svg>
         </div>
+        <div class="anno anno-enrolled">
+          <svg class="anno-arrow" viewBox="-6 -6 132 92" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M 112 72 C 90 50, 60 30, 20 16"/>
+            <path d="M 28 24 L 20 16 L 30 12"/>
+          </svg>
+          <span class="anno-stat"><u>2,000+</u></span>
+          <span class="anno-sub">enrolled globally</span>
+        </div>
       </div>
     </div>
   </div>
@@ -383,8 +413,13 @@
   </div>
   <div class="row">
     <label>Tilt</label>
-    <input type="range" id="tilt" min="-45" max="45" step="1" value="0">
-    <span class="val" id="tiltVal">0°</span>
+    <input type="range" id="tilt" min="-45" max="45" step="1" value="-8">
+    <span class="val" id="tiltVal">-8°</span>
+  </div>
+  <div class="row">
+    <label>Pitch</label>
+    <input type="range" id="pitch" min="-90" max="90" step="1" value="8">
+    <span class="val" id="pitchVal">8°</span>
   </div>
   <div class="row">
     <label>Light</label>
@@ -457,7 +492,8 @@
   </div>
   <button id="pauseBtn">Pause</button>
   <div class="hint">
-    Left drag: spin/tilt · Right drag: axial tilt · Scroll: zoom
+    Left drag: spin/tilt · Right drag: axial tilt · Scroll: zoom<br>
+    <b>G</b> toggle panel · <b>S</b> toggle ground shadow
   </div>
   <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;flex:1;">
@@ -754,14 +790,14 @@ pauseBtn.addEventListener('click', () => {
   pauseBtn.textContent = paused ? 'Play' : 'Pause';
 });
 
-// Initial tilt
-tiltGroup.rotation.z = 0;
+// Initial tilt + pitch (match slider defaults)
+tiltGroup.rotation.z = -8 * Math.PI / 180;
 
 // Mouse controls
 let isDragging = false, isRightDragging = false;
 let lastX = 0, lastY = 0;
 let manualOffsetY = 0;
-let manualOffsetX = 0;
+let manualOffsetX = 8 * Math.PI / 180;
 
 renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -803,9 +839,71 @@ const _resizeGlobe = () => {
 window.addEventListener('resize', _resizeGlobe);
 if (typeof ResizeObserver !== 'undefined') new ResizeObserver(_resizeGlobe).observe(wrap);
 
-// Toggle controls panel with "c"
+// CSS ground shadow defaults (controls removed; tweak here)
+const cssShadowEl = document.querySelector('.globe-shadow');
+const cssShadowState = {
+  color: '#0e0f12',
+  opacity: 0.26,
+  blur: 2,
+  height: 26,
+  inset: 14,
+  bottom: 0,
+  spread: 76,
+};
+(() => {
+  if (!cssShadowEl) return;
+  const s = cssShadowState;
+  const v = s.color.replace('#','');
+  const n = parseInt(v, 16);
+  const r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  cssShadowEl.style.left = s.inset + '%';
+  cssShadowEl.style.right = s.inset + '%';
+  cssShadowEl.style.bottom = s.bottom + '%';
+  cssShadowEl.style.height = s.height + 'px';
+  cssShadowEl.style.filter = `blur(${s.blur}px)`;
+  cssShadowEl.style.background = `radial-gradient(ellipse at center, rgba(${r},${g},${b},${s.opacity}) 0%, rgba(${r},${g},${b},0) ${s.spread}%)`;
+})();
+
+// Pitch slider → manualOffsetX (radians)
+document.getElementById('pitch').addEventListener('input', (e) => {
+  const deg = parseFloat(e.target.value);
+  document.getElementById('pitchVal').textContent = deg + '°';
+  manualOffsetX = deg * Math.PI / 180;
+});
+
+// Make controls panel draggable by its header
+(() => {
+  const panel = document.getElementById('controls');
+  const handle = panel.querySelector('h3');
+  if (!handle) return;
+  let dragging = false, sx=0, sy=0, ox=0, oy=0;
+  handle.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    sx = e.clientX; sy = e.clientY;
+    const r = panel.getBoundingClientRect();
+    ox = r.left; oy = r.top;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    panel.style.left = (ox + e.clientX - sx) + 'px';
+    panel.style.top = (oy + e.clientY - sy) + 'px';
+  });
+  const stop = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    try { handle.releasePointerCapture(e.pointerId); } catch {}
+  };
+  handle.addEventListener('pointerup', stop);
+  handle.addEventListener('pointercancel', stop);
+})();
+
+// Toggle controls panel with "g", CSS shadow with "s"
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'c' || e.key === 'C') {
+  if (e.key === 'g' || e.key === 'G') {
     document.getElementById('controls').classList.toggle('visible');
   }
   if (e.key === 's' || e.key === 'S') {

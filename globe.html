@@ -30,8 +30,8 @@
     position: absolute; inset: 0;
     z-index: 2;
     cursor: grab;
-    animation: wobble 14s ease-in-out infinite;
   }
+  body.wobble-on #canvas-wrap { animation: wobble 14s ease-in-out infinite; }
   #canvas-wrap:active { cursor: grabbing; }
   @keyframes wobble {
     0%, 100% { transform: translateY(0) rotate(0deg); }
@@ -44,12 +44,17 @@
     left: 12%; right: 12%;
     bottom: 4%;
     height: 36px;
-    background: radial-gradient(ellipse at center, rgba(14,15,18,0.32) 0%, rgba(14,15,18,0) 70%);
+    /* Multi-stop gradient simulates blur for html2canvas export (filter: blur() not supported) */
+    background: radial-gradient(ellipse at center,
+      rgba(14,15,18,0.32) 0%,
+      rgba(14,15,18,0.24) 20%,
+      rgba(14,15,18,0.14) 40%,
+      rgba(14,15,18,0.06) 60%,
+      rgba(14,15,18,0)    80%);
     z-index: 1;
-    filter: blur(2px);
-    animation: shadow-wobble 14s ease-in-out infinite;
     pointer-events: none;
   }
+  body.wobble-on .globe-shadow { animation: shadow-wobble 14s ease-in-out infinite; }
   @keyframes shadow-wobble {
     0%, 100% { transform: scaleX(1); opacity: 0.7; }
     50%      { transform: scaleX(0.92); opacity: 0.9; }
@@ -75,12 +80,41 @@
     width: clamp(70px, 14vmin, 120px);
     height: clamp(46px, 9vmin, 80px);
   }
+  .anno-enrolled { bottom: 4%; right: 2%; text-align: right; }
+  .anno-enrolled .anno-arrow {
+    display: block;
+    margin: 0 0 4px auto;
+    width: clamp(70px, 14vmin, 120px);
+    height: clamp(46px, 9vmin, 80px);
+  }
+  .anno-enrolled .anno-stat {
+    font-family: "Caveat", cursive;
+    font-size: clamp(24px, 4.4vmin, 38px);
+    font-weight: 700;
+    line-height: 1;
+    display: block;
+    transform: rotate(5deg);
+    transform-origin: right center;
+  }
+  .anno-enrolled .anno-stat u {
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+  .anno-enrolled .anno-sub {
+    font-family: "Caveat", cursive;
+    font-size: clamp(16px, 2.8vmin, 22px);
+    font-weight: 500;
+    line-height: 1;
+    display: block;
+    margin-top: 6px;
+    transform: rotate(5deg);
+    transform-origin: right center;
+  }
 
   /* Glow panel */
   #glow-panel {
     position: fixed;
     bottom: 14px; left: 50%;
-    transform: translateX(-50%);
     background: rgba(255,255,255,0.96);
     border: 2px solid #222;
     border-radius: 16px;
@@ -91,10 +125,28 @@
     z-index: 50;
     width: 310px;
     max-width: calc(100vw - 24px);
+    max-height: 90vh;
+    overflow: auto;
+    resize: both;
     display: flex;
     flex-direction: column;
     gap: 10px;
   }
+  #gp-drag {
+    margin: -12px -14px 0 -14px;
+    padding: 6px 14px;
+    cursor: grab;
+    background: #f3f3f3;
+    border-bottom: 1.5px solid #ddd;
+    border-radius: 14px 14px 0 0;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: #888;
+    user-select: none;
+  }
+  #gp-drag:active { cursor: grabbing; }
   #glow-panel .gp-section-label {
     font-size: 9px;
     font-weight: 700;
@@ -204,12 +256,39 @@
     font-variant-numeric: tabular-nums;
   }
   #glow-panel.hidden { display: none; }
+
+  /* Export / Play bar */
+  #export-bar {
+    position: fixed;
+    top: 12px; right: 12px;
+    display: flex;
+    gap: 6px;
+    z-index: 60;
+    font-family: "Inter Tight", system-ui, sans-serif;
+  }
+  #export-bar button {
+    border: 1.5px solid #222;
+    background: #fff;
+    color: #222;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 #222;
+    transition: transform 100ms ease;
+  }
+  #export-bar button:hover { transform: translateY(-1px); }
+  #export-bar.hidden { display: none; }
+
+  /* Annotation toggle */
+  body.no-anno .anno { display: none; }
 </style>
 </head>
 <body>
 <div id="globe-frame">
   <div id="globe-square">
-    <div class="globe-shadow" aria-hidden="true" style="display:none"></div>
+    <div class="globe-shadow" aria-hidden="true"></div>
     <div id="canvas-wrap"></div>
     <div class="anno anno-week">
       <span class="anno-text">are you here?</span>
@@ -218,10 +297,27 @@
         <path d="M 92 56 L 100 64 L 90 68"/>
       </svg>
     </div>
+    <div class="anno anno-enrolled">
+      <svg class="anno-arrow" viewBox="-6 -6 132 92" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 112 72 C 90 50, 60 30, 20 16"/>
+        <path d="M 28 24 L 20 16 L 30 12"/>
+      </svg>
+      <span class="anno-stat"><u>2,000+</u></span>
+      <span class="anno-sub">enrolled globally</span>
+    </div>
   </div>
 </div>
 
 <div id="glow-panel" class="hidden" aria-label="Back glow presets"></div>
+
+<div id="export-bar" aria-label="Globe export controls">
+  <button id="btn-pause">Play</button>
+  <button id="btn-wobble">Wobble: Off</button>
+  <button id="btn-anno">Annos: On</button>
+  <button id="btn-export-png">Export PNG</button>
+  <button id="btn-export-webp">Export WebP</button>
+  <button id="btn-export-anim">Export Animated WebP</button>
+</div>
 
 <script type="importmap">
 {
@@ -230,6 +326,7 @@
   }
 }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script type="module">
 import * as THREE from 'three';
 
@@ -238,7 +335,7 @@ const MAP_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABu4AAAN3CAIA
 // Defaults
 const DEFAULTS = {
   speed: 0.20,
-  tilt: 0,
+  tilt: -8,
   light: 2.00,
   zoom: 4.3,
   outline: 0.016,
@@ -259,7 +356,7 @@ const _w0 = wrap.clientWidth || 560, _h0 = wrap.clientHeight || 560;
 const camera = new THREE.PerspectiveCamera(35, _w0/_h0, 0.1, 100);
 camera.position.set(0, 0, DEFAULTS.zoom);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setClearColor(0x000000, 0);
 renderer.setSize(_w0, _h0);
@@ -405,6 +502,7 @@ const panel = document.getElementById('glow-panel');
 
 // Build panel DOM
 panel.innerHTML = `
+  <div id="gp-drag">⋮⋮ Drag to move · ↘ Resize</div>
   <div>
     <div class="gp-section-label">Presets</div>
     <div class="gp-presets" id="gp-preset-btns"></div>
@@ -431,6 +529,20 @@ panel.innerHTML = `
       <label for="gc-blur">Blur</label>
       <input type="range" id="gc-blur" min="0.05" max="1.5" step="0.01" value="${DEFAULTS.shadowBlur}">
       <span class="gp-val" id="gc-blur-val">${DEFAULTS.shadowBlur.toFixed(2)}</span>
+    </div>
+  </div>
+  <hr class="gp-divider">
+  <div class="gp-controls">
+    <div class="gp-section-label">Tilt</div>
+    <div class="gp-row">
+      <label for="gc-tilt">Tilt</label>
+      <input type="range" id="gc-tilt" min="-45" max="45" step="1" value="${DEFAULTS.tilt}">
+      <span class="gp-val" id="gc-tilt-val">${DEFAULTS.tilt}°</span>
+    </div>
+    <div class="gp-row">
+      <label for="gc-pitch">Pitch</label>
+      <input type="range" id="gc-pitch" min="-57" max="57" step="1" value="8">
+      <span class="gp-val" id="gc-pitch-val">8°</span>
     </div>
   </div>
 `;
@@ -499,9 +611,86 @@ panel.querySelector('#gc-color').addEventListener('input', (e) => {
 // Init sliders to match Halo preset (default)
 syncSliders(GLOW_PRESETS.find(p => p.name === 'Halo'));
 
-// Keybindings removed. To toggle panel/shadow via devtools:
-//   document.getElementById('glow-panel').classList.toggle('hidden')
-//   document.querySelector('.globe-shadow').style.display = ''   // or 'none'
+// CSS ground shadow defaults (controls removed; tweak here)
+const cssShadowEl = document.querySelector('.globe-shadow');
+const cssShadowState = {
+  color: '#0e0f12', opacity: 0.26, blur: 2,
+  height: 26, inset: 14, bottom: 0, spread: 76,
+};
+(() => {
+  if (!cssShadowEl) return;
+  const s = cssShadowState;
+  const v = s.color.replace('#','');
+  const n = parseInt(v, 16);
+  const r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  cssShadowEl.style.left = s.inset + '%';
+  cssShadowEl.style.right = s.inset + '%';
+  cssShadowEl.style.bottom = s.bottom + '%';
+  cssShadowEl.style.height = s.height + 'px';
+  cssShadowEl.style.filter = `blur(${s.blur}px)`;
+  cssShadowEl.style.background = `radial-gradient(ellipse at center, rgba(${r},${g},${b},${s.opacity}) 0%, rgba(${r},${g},${b},0) ${s.spread}%)`;
+})();
+
+// Tilt slider
+panel.querySelector('#gc-tilt').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  panel.querySelector('#gc-tilt-val').textContent = v + '°';
+  tiltGroup.rotation.z = v * Math.PI / 180;
+});
+
+// Pitch slider → dragX (radians), drives globe.rotation.x
+panel.querySelector('#gc-pitch').addEventListener('input', (e) => {
+  const deg = parseFloat(e.target.value);
+  panel.querySelector('#gc-pitch-val').textContent = deg + '°';
+  dragX = Math.max(-1, Math.min(1, deg * Math.PI / 180));
+  globe.rotation.x = dragX;
+});
+
+// Drag panel by header
+(() => {
+  const handle = panel.querySelector('#gp-drag');
+  if (!handle) return;
+  let dragging=false, sx=0, sy=0, ox=0, oy=0;
+  handle.addEventListener('pointerdown', (e) => {
+    dragging=true;
+    sx=e.clientX; sy=e.clientY;
+    const r = panel.getBoundingClientRect();
+    ox=r.left; oy=r.top;
+    panel.style.transform = 'none';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.left = ox + 'px';
+    panel.style.top = oy + 'px';
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    panel.style.left = (ox + e.clientX - sx) + 'px';
+    panel.style.top = (oy + e.clientY - sy) + 'px';
+  });
+  const stop = (e) => {
+    if (!dragging) return;
+    dragging=false;
+    try { handle.releasePointerCapture(e.pointerId); } catch {}
+  };
+  handle.addEventListener('pointerup', stop);
+  handle.addEventListener('pointercancel', stop);
+})();
+
+// Keys: G = toggle panel, S = toggle ground shadow
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'g' || e.key === 'G') {
+    panel.classList.toggle('hidden');
+  }
+  if (e.key === 's' || e.key === 'S') {
+    if (!cssShadowEl) return;
+    const hidden = cssShadowEl.style.display === 'none';
+    cssShadowEl.style.display = hidden ? '' : 'none';
+    const cb = panel.querySelector('#cssShadowEnabled');
+    if (cb) cb.checked = hidden;
+  }
+});
 
 // Resize
 const resizeGlobe = () => {
@@ -519,8 +708,10 @@ if (typeof ResizeObserver !== 'undefined') new ResizeObserver(resizeGlobe).obser
 let isDown = false;
 let last = { x: 0, y: 0 };
 let lastT = 0;
-let dragX = 0;
-let velY = DEFAULTS.speed;      // angular velocity rad/sec around Y axis
+let dragX = 8 * Math.PI / 180;
+globe.rotation.x = dragX;
+let paused = true;               // start paused for export workflow
+let velY = 0;                    // angular velocity rad/sec around Y axis (0 while paused)
 const BLEND_RATE = 1.2;          // exponential blend toward DEFAULTS.speed (1/sec) — half-life ~0.58s
 renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 const down = (e) => {
@@ -562,14 +753,222 @@ function animate() {
   const dt = clock.getDelta();
   if (!isDown) {
     globe.rotation.y += velY * dt;
-    // Exponential blend toward auto-spin baseline. High flick velocity decays slowly;
-    // as it nears the baseline the lerp dominates and smoothly settles.
-    const k = 1 - Math.exp(-dt * BLEND_RATE);
-    velY += (DEFAULTS.speed - velY) * k;
+    if (paused) {
+      // decay any residual velocity to 0 (drag flick while paused settles)
+      velY *= Math.exp(-dt * 4);
+    } else {
+      // Exponential blend toward auto-spin baseline. High flick velocity decays slowly;
+      // as it nears the baseline the lerp dominates and smoothly settles.
+      const k = 1 - Math.exp(-dt * BLEND_RATE);
+      velY += (DEFAULTS.speed - velY) * k;
+    }
   }
   renderer.render(scene, camera);
 }
 animate();
+
+// Pause + Export controls
+const btnPause = document.getElementById('btn-pause');
+const btnExportPng = document.getElementById('btn-export-png');
+const btnExportWebp = document.getElementById('btn-export-webp');
+
+btnPause.addEventListener('click', () => {
+  paused = !paused;
+  btnPause.textContent = paused ? 'Play' : 'Pause';
+  if (!paused) velY = DEFAULTS.speed;
+});
+
+async function exportFrame(mimeType, ext, quality) {
+  // Force render so WebGL framebuffer is current before html2canvas reads it
+  renderer.render(scene, camera);
+  const target = document.getElementById('globe-square');
+  if (!window.html2canvas) {
+    console.error('html2canvas not loaded');
+    return;
+  }
+  // Capture composited DOM (3D canvas + CSS ground shadow + SVG annotations)
+  const out = await window.html2canvas(target, {
+    backgroundColor: null,           // preserve transparency
+    useCORS: true,
+    allowTaint: false,
+    scale: window.devicePixelRatio || 1,
+    logging: false,
+  });
+  out.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `globe-frame.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, mimeType, quality);
+}
+
+btnExportPng.addEventListener('click', () => exportFrame('image/png', 'png'));
+btnExportWebp.addEventListener('click', () => exportFrame('image/webp', 'webp', 0.95));
+
+// ============ Animated WebP Export ============
+// Captures globe-only (WebGL canvas), transparent bg, one full rotation seamless loop.
+// Hides dropShadowMesh during capture. DOM annotations / CSS ground shadow are siblings
+// and never enter the WebGL canvas, so they're already excluded.
+const btnExportAnim = document.getElementById('btn-export-anim');
+
+function u24le(n) { return [n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff]; }
+function u32le(n) { return [n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >> 24) & 0xff]; }
+function fourcc(s) { return [s.charCodeAt(0), s.charCodeAt(1), s.charCodeAt(2), s.charCodeAt(3)]; }
+
+// Parse a WebP file blob → extract ALPH (optional) + VP8/VP8L payload bytes for use inside ANMF.
+async function extractFrameChunks(blob) {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  // RIFF header: "RIFF" size "WEBP", chunks follow from offset 12
+  if (String.fromCharCode(buf[0],buf[1],buf[2],buf[3]) !== 'RIFF') throw new Error('not RIFF');
+  if (String.fromCharCode(buf[8],buf[9],buf[10],buf[11]) !== 'WEBP') throw new Error('not WEBP');
+  let off = 12;
+  const out = { alph: null, vp8: null, vp8l: null, width: 0, height: 0 };
+  while (off + 8 <= buf.length) {
+    const tag = String.fromCharCode(buf[off],buf[off+1],buf[off+2],buf[off+3]);
+    const size = buf[off+4] | (buf[off+5]<<8) | (buf[off+6]<<16) | (buf[off+7]<<24);
+    const dataStart = off + 8;
+    const dataEnd = dataStart + size;
+    const padded = dataEnd + (size & 1);
+    if (tag === 'VP8X') {
+      // canvas w-1 / h-1 at +4..+9
+      out.width  = 1 + (buf[dataStart+4] | (buf[dataStart+5]<<8) | (buf[dataStart+6]<<16));
+      out.height = 1 + (buf[dataStart+7] | (buf[dataStart+8]<<8) | (buf[dataStart+9]<<16));
+    } else if (tag === 'ALPH') {
+      out.alph = buf.subarray(off, padded); // include full chunk header
+    } else if (tag === 'VP8 ') {
+      out.vp8 = buf.subarray(off, padded);
+      if (!out.width) {
+        // VP8 lossy: width/height in keyframe header at dataStart+6..+9 (14-bit each)
+        out.width  = (buf[dataStart+6] | (buf[dataStart+7]<<8)) & 0x3fff;
+        out.height = (buf[dataStart+8] | (buf[dataStart+9]<<8)) & 0x3fff;
+      }
+    } else if (tag === 'VP8L') {
+      out.vp8l = buf.subarray(off, padded);
+      if (!out.width) {
+        // VP8L: 1 byte signature 0x2f, then 14b w-1, 14b h-1, 1b alpha, 3b version (LE bitstream)
+        const b1 = buf[dataStart+1], b2 = buf[dataStart+2], b3 = buf[dataStart+3], b4 = buf[dataStart+4];
+        out.width  = 1 + (((b2 & 0x3f) << 8) | b1);
+        out.height = 1 + ((b4 & 0x0f) << 10 | (b3 << 2) | ((b2 & 0xc0) >> 6));
+      }
+    }
+    off = padded;
+  }
+  return out;
+}
+
+async function exportAnimatedWebP() {
+  const FPS = 24;
+  const SPEED = DEFAULTS.speed;     // rad/sec — match live rotation
+  const TOTAL_FRAMES = Math.round((2 * Math.PI / SPEED) * FPS);
+  const DURATION_MS = Math.round(1000 / FPS);
+  const QUALITY = 0.85;
+  const canvas = renderer.domElement;
+
+  // Ensure even dims (WebP container prefers; ANMF offsets are *2)
+  // Three.js renderer canvas pixel size:
+  const W = canvas.width, H = canvas.height;
+
+  btnExportAnim.disabled = true;
+  const wasPaused = paused;
+  paused = true;                       // freeze auto-spin during capture
+  velY = 0;
+  const shadowWasVisible = dropShadowMesh.visible;
+  dropShadowMesh.visible = false;      // no 3D shadow plane
+
+  const startRot = globe.rotation.y;
+  const frames = [];
+
+  try {
+    for (let i = 0; i < TOTAL_FRAMES; i++) {
+      btnExportAnim.textContent = `Rendering… ${i + 1}/${TOTAL_FRAMES}`;
+      globe.rotation.y = startRot + (i / TOTAL_FRAMES) * Math.PI * 2;
+      renderer.render(scene, camera);
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/webp', QUALITY));
+      const parts = await extractFrameChunks(blob);
+      frames.push(parts);
+    }
+
+    btnExportAnim.textContent = 'Muxing…';
+    const fw = frames[0].width, fh = frames[0].height;
+
+    // Build chunks
+    const bytes = [];
+    // VP8X
+    bytes.push(...fourcc('VP8X'), ...u32le(10));
+    bytes.push(0x12, 0, 0, 0);                       // flags: ANIM(bit1) | ALPHA(bit4)
+    bytes.push(...u24le(fw - 1), ...u24le(fh - 1));
+    // ANIM (background BGRA + loops)
+    bytes.push(...fourcc('ANIM'), ...u32le(6));
+    bytes.push(0, 0, 0, 0);                          // bg = transparent
+    bytes.push(0, 0);                                // loop = 0 (infinite)
+    // ANMF per frame
+    for (const f of frames) {
+      // Frame payload = optional ALPH + VP8/VP8L. Strip the chunk header? No — full sub-chunks go inside.
+      // Per spec: ANMF body contains optional ALPH chunk then VP8/VP8L chunk (with headers).
+      const payload = [];
+      if (f.alph) for (const b of f.alph) payload.push(b);
+      const bitstream = f.vp8l || f.vp8;
+      if (!bitstream) throw new Error('frame has no VP8/VP8L');
+      for (const b of bitstream) payload.push(b);
+
+      const anmfDataSize = 16 + payload.length;
+      bytes.push(...fourcc('ANMF'), ...u32le(anmfDataSize));
+      bytes.push(...u24le(0), ...u24le(0));          // x_off/2, y_off/2
+      bytes.push(...u24le(fw - 1), ...u24le(fh - 1));
+      bytes.push(...u24le(DURATION_MS));
+      bytes.push(0x02);                              // flags: dispose=1 (clear to bg before next), blend=0
+      for (const b of payload) bytes.push(b);
+      if (anmfDataSize & 1) bytes.push(0);           // pad to even
+    }
+
+    // RIFF wrapper
+    const bodyLen = 4 + bytes.length;                // "WEBP" + chunks
+    const file = new Uint8Array(8 + bodyLen);
+    file.set(fourcc('RIFF'), 0);
+    file.set(u32le(bodyLen), 4);
+    file.set(fourcc('WEBP'), 8);
+    file.set(bytes, 12);
+
+    const out = new Blob([file], { type: 'image/webp' });
+    const url = URL.createObjectURL(out);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rotating-globe.webp';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('Animated WebP export failed:', err);
+    alert('Export failed: ' + err.message);
+  } finally {
+    globe.rotation.y = startRot;
+    dropShadowMesh.visible = shadowWasVisible;
+    paused = wasPaused;
+    btnExportAnim.disabled = false;
+    btnExportAnim.textContent = 'Export Animated WebP';
+    clock.getDelta();
+  }
+}
+
+btnExportAnim.addEventListener('click', exportAnimatedWebP);
+
+// Wobble toggle (default off)
+const btnWobble = document.getElementById('btn-wobble');
+btnWobble.addEventListener('click', () => {
+  const on = document.body.classList.toggle('wobble-on');
+  btnWobble.textContent = 'Wobble: ' + (on ? 'On' : 'Off');
+});
+
+// Annotation toggle (default on)
+const btnAnno = document.getElementById('btn-anno');
+btnAnno.addEventListener('click', () => {
+  const hidden = document.body.classList.toggle('no-anno');
+  btnAnno.textContent = 'Annos: ' + (hidden ? 'Off' : 'On');
+});
 </script>
 </body>
 </html>

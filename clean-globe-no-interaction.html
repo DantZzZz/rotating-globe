@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Atlas Globe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --ink: #0e0f12; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: transparent;
+    overflow: hidden;
+  }
+  #globe-frame {
+    position: relative;
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #globe-square {
+    position: relative;
+    width: min(100vw, 100vh);
+    height: min(100vw, 100vh);
+    aspect-ratio: 1 / 1;
+  }
+  #canvas-wrap {
+    position: absolute; inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    animation: wobble 14s ease-in-out infinite;
+  }
+  @keyframes wobble {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-10px) rotate(0.5deg); }
+  }
+  #canvas-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+
+  .globe-shadow {
+    position: absolute;
+    left: 12%; right: 12%;
+    bottom: 4%;
+    height: 36px;
+    background: radial-gradient(ellipse at center, rgba(14,15,18,0.32) 0%, rgba(14,15,18,0) 70%);
+    z-index: 1;
+    filter: blur(2px);
+    animation: shadow-wobble 14s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes shadow-wobble {
+    0%, 100% { transform: scaleX(1); opacity: 0.7; }
+    50%      { transform: scaleX(0.92); opacity: 0.9; }
+  }
+
+  .anno {
+    position: absolute; z-index: 4;
+    pointer-events: none; color: var(--ink);
+  }
+  .anno-text {
+    font-family: "Caveat", cursive;
+    font-size: clamp(18px, 3.2vmin, 28px);
+    font-weight: 600;
+    line-height: 1;
+    display: inline-block;
+    white-space: nowrap;
+  }
+  .anno-week { top: 4%; left: 2%; }
+  .anno-week .anno-text { transform: rotate(-6deg); }
+  .anno-week .anno-arrow {
+    display: block;
+    margin-top: 4px;
+    width: clamp(70px, 14vmin, 120px);
+    height: clamp(46px, 9vmin, 80px);
+  }
+  .anno-enrolled { bottom: 4%; right: 2%; text-align: right; }
+  .anno-enrolled .anno-arrow {
+    display: block;
+    margin: 0 0 4px auto;
+    width: clamp(70px, 14vmin, 120px);
+    height: clamp(46px, 9vmin, 80px);
+  }
+  .anno-enrolled .anno-stat {
+    font-family: "Caveat", cursive;
+    font-size: clamp(24px, 4.4vmin, 38px);
+    font-weight: 700;
+    line-height: 1;
+    display: block;
+    transform: rotate(5deg);
+    transform-origin: right center;
+  }
+  .anno-enrolled .anno-stat u {
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+  .anno-enrolled .anno-sub {
+    font-family: "Caveat", cursive;
+    font-size: clamp(16px, 2.8vmin, 22px);
+    font-weight: 500;
+    line-height: 1;
+    display: block;
+    margin-top: 6px;
+    transform: rotate(5deg);
+    transform-origin: right center;
+  }
+
+  /* Glow panel */
+  #glow-panel {
+    position: fixed;
+    bottom: 14px; left: 50%;
+    background: rgba(255,255,255,0.96);
+    border: 2px solid #222;
+    border-radius: 16px;
+    padding: 12px 14px 14px;
+    box-shadow: 3px 3px 0 #222;
+    font-family: "Inter Tight", system-ui, sans-serif;
+    font-size: 12px; font-weight: 600;
+    z-index: 50;
+    width: 310px;
+    max-width: calc(100vw - 24px);
+    max-height: 90vh;
+    overflow: auto;
+    resize: both;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #gp-drag {
+    margin: -12px -14px 0 -14px;
+    padding: 6px 14px;
+    cursor: grab;
+    background: #f3f3f3;
+    border-bottom: 1.5px solid #ddd;
+    border-radius: 14px 14px 0 0;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: #888;
+    user-select: none;
+  }
+  #gp-drag:active { cursor: grabbing; }
+  #glow-panel .gp-section-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: #999;
+    margin-bottom: 4px;
+  }
+  #glow-panel .gp-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  #glow-panel button {
+    border: 1.5px solid #222;
+    background: #fff;
+    color: #222;
+    border-radius: 999px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    transition: transform 100ms ease, background 100ms ease;
+    white-space: nowrap;
+  }
+  #glow-panel button:hover { transform: translateY(-1px); }
+  #glow-panel button.active { background: #222; color: #fff; }
+  #glow-panel .gp-divider {
+    border: none;
+    border-top: 1.5px solid #e8e8e8;
+    margin: 0;
+  }
+  #glow-panel .gp-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  #glow-panel .gp-row {
+    display: grid;
+    grid-template-columns: 58px 1fr 38px;
+    align-items: center;
+    gap: 8px;
+  }
+  #glow-panel .gp-row label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #444;
+  }
+  #glow-panel input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: #ddd;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+  }
+  #glow-panel input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #222;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1.5px #222;
+  }
+  #glow-panel input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #222;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1.5px #222;
+  }
+  #glow-panel .gp-val {
+    font-size: 11px;
+    color: #666;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Color row */
+  #glow-panel .gp-color-row {
+    display: grid;
+    grid-template-columns: 58px auto 1fr;
+    align-items: center;
+    gap: 8px;
+  }
+  #glow-panel .gp-color-row label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #444;
+  }
+  #glow-panel input[type=color] {
+    width: 28px; height: 24px;
+    border: 1.5px solid #222;
+    border-radius: 6px;
+    padding: 2px;
+    cursor: pointer;
+    background: none;
+  }
+  #glow-panel .gp-hex {
+    font-size: 11px;
+    color: #666;
+    font-family: monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  #glow-panel.hidden { display: none; }
+
+</style>
+</head>
+<body>
+<div id="globe-frame">
+  <div id="globe-square">
+    <div id="canvas-wrap"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const MAP_DATA_URL = "https://static.wixstatic.com/media/967614_bdc0a77e16b84d6ab3e7f4ddffe103ca~mv2.png";
+
+// Defaults
+const DEFAULTS = {
+  speed: 0.20,
+  tilt: -8,
+  light: 2.00,
+  zoom: 4.3,
+  outline: 0.016,
+  hue: 7,
+  sat: 1.08,
+  bri: 1.10,
+  shadowColor: 0xFFFFFF,
+  shadowOpacity: 0.65,
+  shadowSize: 1.85,
+  shadowBlur: 0.50,
+};
+
+const wrap = document.getElementById('canvas-wrap');
+const scene = new THREE.Scene();
+scene.background = null;
+
+const _w0 = wrap.clientWidth || 560, _h0 = wrap.clientHeight || 560;
+const camera = new THREE.PerspectiveCamera(35, _w0/_h0, 0.1, 100);
+camera.position.set(0, 0, DEFAULTS.zoom);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setClearColor(0x000000, 0);
+renderer.setSize(_w0, _h0);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+wrap.appendChild(renderer.domElement);
+
+// Lights
+const ambient = new THREE.AmbientLight(0xffffff, 1.7 * DEFAULTS.light);
+scene.add(ambient);
+const dir = new THREE.DirectionalLight(0xffffff, 1.2 * DEFAULTS.light);
+dir.position.set(5, 3, 5);
+scene.add(dir);
+
+// Globe texture (Wix-hosted) — notify parent when first textured frame is on screen
+const loader = new THREE.TextureLoader();
+loader.setCrossOrigin('anonymous');
+const tex = loader.load(
+  MAP_DATA_URL,
+  () => {
+    // Wait 2 frames so first textured render is composited before signalling parent
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'globe-ready' }, '*');
+        }
+      });
+    });
+  },
+  undefined,
+  (err) => { console.warn('Globe texture failed to load:', err); }
+);
+tex.colorSpace = THREE.SRGBColorSpace;
+tex.anisotropy = 8;
+
+const geo = new THREE.SphereGeometry(1, 96, 64);
+const mat = new THREE.MeshStandardMaterial({
+  map: tex,
+  roughness: 0.85,
+  metalness: 0.0,
+  transparent: true,
+});
+
+// HSL shader injection
+const hslUniforms = {
+  uHue: { value: DEFAULTS.hue / 360 },
+  uSat: { value: DEFAULTS.sat },
+  uBri: { value: DEFAULTS.bri },
+};
+mat.onBeforeCompile = (shader) => {
+  shader.uniforms.uHue = hslUniforms.uHue;
+  shader.uniforms.uSat = hslUniforms.uSat;
+  shader.uniforms.uBri = hslUniforms.uBri;
+  shader.fragmentShader = `
+    uniform float uHue;
+    uniform float uSat;
+    uniform float uBri;
+    vec3 rgb2hsv(vec3 c){
+      vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
+      vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+      vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+      float d = q.x - min(q.w, q.y);
+      float e = 1.0e-10;
+      return vec3(abs(q.z + (q.w - q.y)/(6.0*d + e)), d/(q.x + e), q.x);
+    }
+    vec3 hsv2rgb(vec3 c){
+      vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+      vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+      return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }
+  ` + shader.fragmentShader;
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <map_fragment>',
+    `
+      #include <map_fragment>
+      {
+        vec3 hsv = rgb2hsv(diffuseColor.rgb);
+        hsv.x = fract(hsv.x + uHue);
+        hsv.y = clamp(hsv.y * uSat, 0.0, 1.0);
+        hsv.z = clamp(hsv.z * uBri, 0.0, 1.0);
+        diffuseColor.rgb = hsv2rgb(hsv);
+      }
+    `
+  );
+};
+
+const globe = new THREE.Mesh(geo, mat);
+
+// Black outline shell
+const outlineGeo = new THREE.SphereGeometry(1, 96, 64);
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0x0e0f12, side: THREE.BackSide });
+const outlineMesh = new THREE.Mesh(outlineGeo, outlineMat);
+outlineMesh.scale.setScalar(1 + DEFAULTS.outline);
+
+// Tilt group
+const tiltGroup = new THREE.Group();
+tiltGroup.add(outlineMesh);
+tiltGroup.add(globe);
+tiltGroup.rotation.z = DEFAULTS.tilt * Math.PI / 180;
+scene.add(tiltGroup);
+
+// Drop shadow plane behind globe
+const dropShadowMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uColor:   { value: new THREE.Color(DEFAULTS.shadowColor) },
+    uOpacity: { value: DEFAULTS.shadowOpacity },
+    uBlur:    { value: DEFAULTS.shadowBlur },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+  `,
+  fragmentShader: `
+    uniform vec3 uColor;
+    uniform float uOpacity;
+    uniform float uBlur;
+    varying vec2 vUv;
+    void main() {
+      float d = length(vUv - 0.5) * 2.0;
+      float a = (1.0 - smoothstep(0.0, 1.0, pow(d, 1.0 / max(uBlur, 0.01)))) * uOpacity;
+      if (a < 0.001) discard;
+      gl_FragColor = vec4(uColor, a);
+    }
+  `,
+  transparent: true,
+  depthTest: false,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
+const dropShadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), dropShadowMat);
+dropShadowMesh.renderOrder = -1;
+dropShadowMesh.position.set(0, 0, -1.5);
+dropShadowMesh.scale.setScalar(DEFAULTS.shadowSize);
+// 3D drop shadow disabled for no-interaction build
+
+// Glow presets removed for no-interaction build
+
+/* glow panel removed */ /*
+  <div id="gp-drag">⋮⋮ Drag to move · ↘ Resize</div>
+  <div>
+    <div class="gp-section-label">Presets</div>
+    <div class="gp-presets" id="gp-preset-btns"></div>
+  </div>
+  <hr class="gp-divider">
+  <div class="gp-controls">
+    <div class="gp-section-label">Custom</div>
+    <div class="gp-color-row">
+      <label for="gc-color">Color</label>
+      <input type="color" id="gc-color" value="#3FA9F5">
+      <span class="gp-hex" id="gc-hex">#3FA9F5</span>
+    </div>
+    <div class="gp-row">
+      <label for="gc-opacity">Opacity</label>
+      <input type="range" id="gc-opacity" min="0" max="1" step="0.01" value="${DEFAULTS.shadowOpacity}">
+      <span class="gp-val" id="gc-opacity-val">${DEFAULTS.shadowOpacity.toFixed(2)}</span>
+    </div>
+    <div class="gp-row">
+      <label for="gc-size">Size</label>
+      <input type="range" id="gc-size" min="0.5" max="3.5" step="0.05" value="${DEFAULTS.shadowSize}">
+      <span class="gp-val" id="gc-size-val">${DEFAULTS.shadowSize.toFixed(2)}</span>
+    </div>
+    <div class="gp-row">
+      <label for="gc-blur">Blur</label>
+      <input type="range" id="gc-blur" min="0.05" max="1.5" step="0.01" value="${DEFAULTS.shadowBlur}">
+      <span class="gp-val" id="gc-blur-val">${DEFAULTS.shadowBlur.toFixed(2)}</span>
+    </div>
+  </div>
+  <hr class="gp-divider">
+  <div class="gp-controls">
+    <div class="gp-section-label">Tilt</div>
+    <div class="gp-row">
+      <label for="gc-tilt">Tilt</label>
+      <input type="range" id="gc-tilt" min="-45" max="45" step="1" value="${DEFAULTS.tilt}">
+      <span class="gp-val" id="gc-tilt-val">${DEFAULTS.tilt}°</span>
+    </div>
+    <div class="gp-row">
+      <label for="gc-pitch">Pitch</label>
+      <input type="range" id="gc-pitch" min="-57" max="57" step="1" value="8">
+      <span class="gp-val" id="gc-pitch-val">8°</span>
+    </div>
+  </div>
+`;
+
+const presetWrap = panel.querySelector('#gp-preset-btns');
+
+// Sync sliders → match a preset's values
+function syncSliders(p) {
+  const hex = '#' + p.color.toString(16).padStart(6, '0');
+  panel.querySelector('#gc-color').value = hex;
+  panel.querySelector('#gc-hex').textContent = hex.toUpperCase();
+  panel.querySelector('#gc-opacity').value = p.opacity;
+  panel.querySelector('#gc-opacity-val').textContent = p.opacity.toFixed(2);
+  panel.querySelector('#gc-size').value = p.size;
+  panel.querySelector('#gc-size-val').textContent = p.size.toFixed(2);
+  panel.querySelector('#gc-blur').value = p.blur;
+  panel.querySelector('#gc-blur-val').textContent = p.blur.toFixed(2);
+}
+
+// Clear active preset highlight
+function clearActivePreset() {
+  presetWrap.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+}
+
+// Apply current slider state to uniforms
+function applyCustom() {
+  const hex = panel.querySelector('#gc-color').value;
+  dropShadowMat.uniforms.uColor.value.set(hex);
+  dropShadowMat.uniforms.uOpacity.value = parseFloat(panel.querySelector('#gc-opacity').value);
+  dropShadowMat.uniforms.uBlur.value = parseFloat(panel.querySelector('#gc-blur').value);
+  dropShadowMesh.scale.setScalar(parseFloat(panel.querySelector('#gc-size').value));
+}
+
+// Preset buttons
+GLOW_PRESETS.forEach((p, i) => {
+  const btn = document.createElement('button');
+  btn.textContent = p.name;
+  btn.dataset.idx = i;
+  btn.addEventListener('click', () => {
+    applyGlow(p);
+    syncSliders(p);
+    clearActivePreset();
+    btn.classList.add('active');
+  });
+  if (p.name === 'Halo') { btn.classList.add('active'); }
+  presetWrap.appendChild(btn);
+});
+
+// Color picker
+panel.querySelector('#gc-color').addEventListener('input', (e) => {
+  panel.querySelector('#gc-hex').textContent = e.target.value.toUpperCase();
+  clearActivePreset();
+  applyCustom();
+});
+
+// Range sliders
+[['gc-opacity','gc-opacity-val'], ['gc-size','gc-size-val'], ['gc-blur','gc-blur-val']].forEach(([id, valId]) => {
+  panel.querySelector(`#${id}`).addEventListener('input', () => {
+    const v = parseFloat(panel.querySelector(`#${id}`).value);
+    panel.querySelector(`#${valId}`).textContent = v.toFixed(2);
+    clearActivePreset();
+    applyCustom();
+  });
+});
+
+// Init sliders to match Halo preset (default)
+syncSliders(GLOW_PRESETS.find(p => p.name === 'Halo'));
+
+// CSS ground shadow defaults (controls removed; tweak here)
+const cssShadowEl = document.querySelector('.globe-shadow');
+const cssShadowState = {
+  color: '#0e0f12', opacity: 0.26, blur: 2,
+  height: 26, inset: 14, bottom: 0, spread: 76,
+};
+(() => {
+  if (!cssShadowEl) return;
+  const s = cssShadowState;
+  const v = s.color.replace('#','');
+  const n = parseInt(v, 16);
+  const r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  cssShadowEl.style.left = s.inset + '%';
+  cssShadowEl.style.right = s.inset + '%';
+  cssShadowEl.style.bottom = s.bottom + '%';
+  cssShadowEl.style.height = s.height + 'px';
+  cssShadowEl.style.filter = `blur(${s.blur}px)`;
+  cssShadowEl.style.background = `radial-gradient(ellipse at center, rgba(${r},${g},${b},${s.opacity}) 0%, rgba(${r},${g},${b},0) ${s.spread}%)`;
+})();
+
+// Tilt slider
+panel.querySelector('#gc-tilt').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  panel.querySelector('#gc-tilt-val').textContent = v + '°';
+  tiltGroup.rotation.z = v * Math.PI / 180;
+});
+
+// Pitch slider → dragX (radians), drives globe.rotation.x
+panel.querySelector('#gc-pitch').addEventListener('input', (e) => {
+  const deg = parseFloat(e.target.value);
+  panel.querySelector('#gc-pitch-val').textContent = deg + '°';
+  dragX = Math.max(-1, Math.min(1, deg * Math.PI / 180));
+  globe.rotation.x = dragX;
+});
+
+// Drag panel by header
+(() => {
+  const handle = panel.querySelector('#gp-drag');
+  if (!handle) return;
+  let dragging=false, sx=0, sy=0, ox=0, oy=0;
+  handle.addEventListener('pointerdown', (e) => {
+    dragging=true;
+    sx=e.clientX; sy=e.clientY;
+    const r = panel.getBoundingClientRect();
+    ox=r.left; oy=r.top;
+    panel.style.transform = 'none';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.left = ox + 'px';
+    panel.style.top = oy + 'px';
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    panel.style.left = (ox + e.clientX - sx) + 'px';
+    panel.style.top = (oy + e.clientY - sy) + 'px';
+  });
+  const stop = (e) => {
+    if (!dragging) return;
+    dragging=false;
+    try { handle.releasePointerCapture(e.pointerId); } catch {}
+  };
+  handle.addEventListener('pointerup', stop);
+  handle.addEventListener('pointercancel', stop);
+})();
+
+// Keybindings removed. Tinker panel + shadow toggle via devtools:
+//   document.getElementById('glow-panel').classList.toggle('hidden')
+//   document.querySelector('.globe-shadow').style.display = ''   // or 'none'
+
+*/
+
+// Resize
+const resizeGlobe = () => {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  if (!w || !h) return;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+};
+resizeGlobe();
+window.addEventListener('resize', resizeGlobe);
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(resizeGlobe).observe(wrap);
+
+// No interaction — fixed pitch + constant auto-rotate
+globe.rotation.x = 8 * Math.PI / 180;
+
+// Animation loop
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  globe.rotation.y += DEFAULTS.speed * dt;
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
